@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import csv
 import re
+from pathlib import Path
 
 
 EMAIL_PATTERN = re.compile(r"[\w\.-]+@[\w\.-]+")
+CSV_HEADERS = ["username", "url", "location", "email", "linkedin"]
 
 
 def extract_email(text: str | None) -> str:
@@ -22,22 +24,37 @@ def extract_linkedin(blog: str | None, bio: str | None) -> str:
     return ""
 
 
-def export_profiles_to_csv(details: list[dict], file_path: str) -> int:
-    seen: set[str] = set()
-    exported_count = 0
+def _load_existing_usernames(file_path: Path) -> set[str]:
+    if not file_path.exists():
+        return set()
 
-    with open(file_path, "w", newline="", encoding="utf-8") as file_obj:
+    with file_path.open("r", newline="", encoding="utf-8") as file_obj:
+        reader = csv.DictReader(file_obj)
+        return {row["username"] for row in reader if row.get("username")}
+
+
+def export_profiles_to_csv(details: list[dict], file_path: str) -> int:
+    csv_path = Path(file_path)
+    seen = _load_existing_usernames(csv_path)
+    appended_count = 0
+    write_header = not csv_path.exists() or csv_path.stat().st_size == 0
+
+    with csv_path.open("a", newline="", encoding="utf-8") as file_obj:
         writer = csv.writer(file_obj)
-        writer.writerow(["username", "url", "location", "email", "linkedin"])
+        if write_header:
+            writer.writerow(CSV_HEADERS)
 
         for detail in details:
             username = detail.get("login")
             if not username or username in seen:
                 continue
 
-            seen.add(username)
             email = detail.get("email") or extract_email(detail.get("bio"))
             linkedin = extract_linkedin(detail.get("blog"), detail.get("bio"))
+            if not email and not linkedin:
+                continue
+
+            seen.add(username)
 
             writer.writerow(
                 [
@@ -48,6 +65,6 @@ def export_profiles_to_csv(details: list[dict], file_path: str) -> int:
                     linkedin,
                 ]
             )
-            exported_count += 1
+            appended_count += 1
 
-    return exported_count
+    return appended_count

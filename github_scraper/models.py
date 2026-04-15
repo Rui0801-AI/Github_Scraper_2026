@@ -10,6 +10,7 @@ DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 @dataclass(slots=True)
 class SearchFilters:
     location: str
+    specific_query: str = ""
     created_after: str = ""
     min_repos: str = ""
     max_repos: str = ""

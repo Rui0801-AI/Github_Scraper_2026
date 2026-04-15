@@ -3,19 +3,23 @@ from __future__ import annotations
 import asyncio
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from pathlib import Path
+from tkinter import messagebox, ttk
 
 from github_scraper.exporter import export_profiles_to_csv
 from github_scraper.models import SearchFilters
 from github_scraper.scraper import scrape_users
 
 
+RESULT_CSV_PATH = Path(__file__).resolve().parent.parent / "result.csv"
+
+
 class GitHubScraperApp:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("GitHub Talent Scraper")
-        self.root.geometry("1120x720")
-        self.root.minsize(900, 560)
+        self.root.geometry("1120x920")
+        self.root.minsize(900, 760)
         self.root.configure(bg="#eef3f9")
 
         self.style = ttk.Style()
@@ -119,6 +123,7 @@ class GitHubScraperApp:
 
     def _create_variables(self) -> None:
         self.token_var = tk.StringVar()
+        self.specific_query_var = tk.StringVar()
         self.location_var = tk.StringVar()
         self.created_var = tk.StringVar()
         self.min_repos_var = tk.StringVar()
@@ -127,7 +132,7 @@ class GitHubScraperApp:
         self.max_followers_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Ready to search GitHub profiles.")
         self.progress_text_var = tk.StringVar(value="0 / 0")
-        self.result_var = tk.StringVar(value="No export yet.")
+        self.result_var = tk.StringVar(value=f"Appends to\n{RESULT_CSV_PATH}")
 
     def _build_layout(self) -> None:
         shell = ttk.Frame(self.root, style="Surface.TFrame", padding=14)
@@ -135,28 +140,8 @@ class GitHubScraperApp:
         shell.columnconfigure(0, weight=1)
         shell.rowconfigure(0, weight=1)
 
-        canvas = tk.Canvas(
-            shell,
-            background="#f7f9fc",
-            highlightthickness=0,
-            borderwidth=0,
-        )
-        scrollbar = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-
-        outer = ttk.Frame(canvas, style="Surface.TFrame", padding=16)
-        self._canvas_window = canvas.create_window((0, 0), window=outer, anchor="nw")
-        self._scroll_canvas = canvas
-
-        outer.bind(
-            "<Configure>",
-            lambda event: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.bind("<Configure>", self._resize_canvas_window)
-        canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        outer = ttk.Frame(shell, style="Surface.TFrame", padding=16)
+        outer.grid(row=0, column=0, sticky="nsew")
 
         outer.columnconfigure(0, weight=7)
         outer.columnconfigure(1, weight=4)
@@ -196,26 +181,34 @@ class GitHubScraperApp:
         )
         ttk.Label(
             card,
-            text="Define the audience you want to export. Only location is required.",
+            text="Define the audience you want to export. Required filters are called out separately from optional ones.",
             style="Body.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
 
+        ttk.Label(card, text="Required Option", style="SectionTitle.TLabel").grid(
+            row=2, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(
+            card,
+            text="Location is required. All other fields below are optional and help narrow the search.",
+            style="Hint.TLabel",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 12))
+
         field_specs = [
-            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True),
-            ("Location", self.location_var, "Example: New York or Germany", False),
-            ("Created After", self.created_var, "Use YYYY-MM-DD", False),
-            ("Min Repos", self.min_repos_var, "Whole number", False),
-            ("Max Repos", self.max_repos_var, "Whole number", False),
-            ("Min Followers", self.min_followers_var, "Whole number", False),
-            ("Max Followers", self.max_followers_var, "Whole number", False),
+            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True, False, 4, 0),
+            ("Specific String Query", self.specific_query_var, "Optional. Add keywords like python recruiter or react.", False, False, 4, 1),
+            ("Location", self.location_var, "Required. Example: New York or Germany", False, True, 7, 0),
+            ("Creation Date", self.created_var, "Optional. Use YYYY-MM-DD", False, False, 7, 1),
+            ("Min Repos", self.min_repos_var, "Optional. Whole number", False, False, 10, 0),
+            ("Max Repos", self.max_repos_var, "Optional. Whole number", False, False, 10, 1),
+            ("Min Followers", self.min_followers_var, "Optional. Whole number", False, False, 13, 0),
+            ("Max Followers", self.max_followers_var, "Optional. Whole number", False, False, 13, 1),
         ]
 
-        for index, (label, variable, hint, masked) in enumerate(field_specs):
-            column = index % 2
-            row = 2 + (index // 2) * 3
-            self._build_field(card, row, column, label, variable, hint, masked)
+        for label, variable, hint, masked, required, row, column in field_specs:
+            self._build_field(card, row, column, label, variable, hint, masked, required)
 
-        action_row = 2 + ((len(field_specs) + 1) // 2) * 3
+        action_row = 16
         actions = ttk.Frame(card, style="Card.TFrame")
         actions.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=(12, 14))
         actions.columnconfigure(0, weight=1)
@@ -271,8 +264,8 @@ class GitHubScraperApp:
         ttk.Label(
             card,
             text=(
-                "The export includes username, profile URL, location, email, and LinkedIn "
-                "when those details can be discovered from public profile data."
+                "Results are appended to the local result.csv file. Only profiles with a "
+                "public email or LinkedIn value are saved."
             ),
             style="Body.TLabel",
             wraplength=280,
@@ -326,6 +319,7 @@ class GitHubScraperApp:
         variable: tk.StringVar,
         hint: str,
         masked: bool,
+        required: bool,
     ) -> None:
         field = ttk.Frame(parent, style="Card.TFrame")
         field.grid(
@@ -337,7 +331,8 @@ class GitHubScraperApp:
         )
         field.columnconfigure(0, weight=1)
 
-        ttk.Label(field, text=label, style="FieldLabel.TLabel").grid(row=0, column=0, sticky="w")
+        field_label = f"{label} *" if required else label
+        ttk.Label(field, text=field_label, style="FieldLabel.TLabel").grid(row=0, column=0, sticky="w")
         entry = ttk.Entry(
             field,
             textvariable=variable,
@@ -347,18 +342,13 @@ class GitHubScraperApp:
         entry.grid(row=1, column=0, sticky="ew", pady=(6, 0), ipady=2)
         ttk.Label(field, text=hint, style="Hint.TLabel").grid(row=2, column=0, sticky="w", pady=(4, 0))
 
-    def _resize_canvas_window(self, event: tk.Event) -> None:
-        self._scroll_canvas.itemconfigure(self._canvas_window, width=event.width)
-
-    def _on_mousewheel(self, event: tk.Event) -> None:
-        self._scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
     def _clear_filters(self) -> None:
         if self.is_running:
             return
 
         for variable in (
             self.token_var,
+            self.specific_query_var,
             self.location_var,
             self.created_var,
             self.min_repos_var,
@@ -375,6 +365,7 @@ class GitHubScraperApp:
     def _collect_filters(self) -> SearchFilters:
         return SearchFilters(
             location=self.location_var.get().strip(),
+            specific_query=self.specific_query_var.get().strip(),
             created_after=self.created_var.get().strip(),
             min_repos=self.min_repos_var.get().strip(),
             max_repos=self.max_repos_var.get().strip(),
@@ -392,14 +383,6 @@ class GitHubScraperApp:
             messagebox.showerror("Invalid Filters", error)
             return
 
-        file_path = filedialog.asksaveasfilename(
-            title="Save CSV Export",
-            defaultextension=".csv",
-            filetypes=[("CSV File", "*.csv")],
-        )
-        if not file_path:
-            return
-
         self._set_running_state(True)
         self.status_var.set("Preparing GitHub search...")
         self.progress_text_var.set("0 / 0")
@@ -407,16 +390,16 @@ class GitHubScraperApp:
 
         worker = threading.Thread(
             target=self._scrape_worker,
-            args=(filters, self.token_var.get().strip(), file_path),
+            args=(filters, self.token_var.get().strip()),
             daemon=True,
         )
         worker.start()
 
-    def _scrape_worker(self, filters: SearchFilters, token: str, file_path: str) -> None:
+    def _scrape_worker(self, filters: SearchFilters, token: str) -> None:
         try:
             details = asyncio.run(scrape_users(filters, token, self._queue_progress))
-            exported_count = export_profiles_to_csv(details, file_path)
-            self.root.after(0, lambda: self._handle_success(exported_count, file_path))
+            exported_count = export_profiles_to_csv(details, str(RESULT_CSV_PATH))
+            self.root.after(0, lambda: self._handle_success(exported_count))
         except Exception as exc:  # noqa: BLE001
             self.root.after(0, lambda: self._handle_error(str(exc)))
 
@@ -429,13 +412,16 @@ class GitHubScraperApp:
         self.progress_text_var.set(f"{current} / {total}")
         self.status_var.set(message)
 
-    def _handle_success(self, exported_count: int, file_path: str) -> None:
+    def _handle_success(self, exported_count: int) -> None:
         self._set_running_state(False)
         self.progress.configure(value=self.progress["maximum"])
-        self.progress_text_var.set(f"{exported_count} exported")
+        self.progress_text_var.set(f"{exported_count} appended")
         self.status_var.set("Export complete.")
-        self.result_var.set(f"{exported_count} profiles exported\n{file_path}")
-        messagebox.showinfo("Export Complete", f"Saved {exported_count} profiles to:\n{file_path}")
+        self.result_var.set(f"{exported_count} profiles appended\n{RESULT_CSV_PATH}")
+        messagebox.showinfo(
+            "Export Complete",
+            f"Appended {exported_count} new profiles to:\n{RESULT_CSV_PATH}",
+        )
 
     def _handle_error(self, error_message: str) -> None:
         self._set_running_state(False)
