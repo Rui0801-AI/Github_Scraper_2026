@@ -3,11 +3,15 @@ from __future__ import annotations
 import asyncio
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from pathlib import Path
+from tkinter import messagebox, ttk
 
 from github_scraper.exporter import export_profiles_to_csv
 from github_scraper.models import SearchFilters
 from github_scraper.scraper import scrape_users
+
+
+RESULT_CSV_PATH = Path(__file__).resolve().parent.parent / "result.csv"
 
 
 class GitHubScraperApp:
@@ -128,7 +132,7 @@ class GitHubScraperApp:
         self.max_followers_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Ready to search GitHub profiles.")
         self.progress_text_var = tk.StringVar(value="0 / 0")
-        self.result_var = tk.StringVar(value="No export yet.")
+        self.result_var = tk.StringVar(value=f"Appends to\n{RESULT_CSV_PATH}")
 
     def _build_layout(self) -> None:
         shell = ttk.Frame(self.root, style="Surface.TFrame", padding=14)
@@ -260,8 +264,8 @@ class GitHubScraperApp:
         ttk.Label(
             card,
             text=(
-                "The export includes username, profile URL, location, email, and LinkedIn "
-                "when those details can be discovered from public profile data."
+                "Results are appended to the local result.csv file. Only profiles with a "
+                "public email or LinkedIn value are saved."
             ),
             style="Body.TLabel",
             wraplength=280,
@@ -379,14 +383,6 @@ class GitHubScraperApp:
             messagebox.showerror("Invalid Filters", error)
             return
 
-        file_path = filedialog.asksaveasfilename(
-            title="Save CSV Export",
-            defaultextension=".csv",
-            filetypes=[("CSV File", "*.csv")],
-        )
-        if not file_path:
-            return
-
         self._set_running_state(True)
         self.status_var.set("Preparing GitHub search...")
         self.progress_text_var.set("0 / 0")
@@ -394,16 +390,16 @@ class GitHubScraperApp:
 
         worker = threading.Thread(
             target=self._scrape_worker,
-            args=(filters, self.token_var.get().strip(), file_path),
+            args=(filters, self.token_var.get().strip()),
             daemon=True,
         )
         worker.start()
 
-    def _scrape_worker(self, filters: SearchFilters, token: str, file_path: str) -> None:
+    def _scrape_worker(self, filters: SearchFilters, token: str) -> None:
         try:
             details = asyncio.run(scrape_users(filters, token, self._queue_progress))
-            exported_count = export_profiles_to_csv(details, file_path)
-            self.root.after(0, lambda: self._handle_success(exported_count, file_path))
+            exported_count = export_profiles_to_csv(details, str(RESULT_CSV_PATH))
+            self.root.after(0, lambda: self._handle_success(exported_count))
         except Exception as exc:  # noqa: BLE001
             self.root.after(0, lambda: self._handle_error(str(exc)))
 
@@ -416,13 +412,16 @@ class GitHubScraperApp:
         self.progress_text_var.set(f"{current} / {total}")
         self.status_var.set(message)
 
-    def _handle_success(self, exported_count: int, file_path: str) -> None:
+    def _handle_success(self, exported_count: int) -> None:
         self._set_running_state(False)
         self.progress.configure(value=self.progress["maximum"])
-        self.progress_text_var.set(f"{exported_count} exported")
+        self.progress_text_var.set(f"{exported_count} appended")
         self.status_var.set("Export complete.")
-        self.result_var.set(f"{exported_count} profiles exported\n{file_path}")
-        messagebox.showinfo("Export Complete", f"Saved {exported_count} profiles to:\n{file_path}")
+        self.result_var.set(f"{exported_count} profiles appended\n{RESULT_CSV_PATH}")
+        messagebox.showinfo(
+            "Export Complete",
+            f"Appended {exported_count} new profiles to:\n{RESULT_CSV_PATH}",
+        )
 
     def _handle_error(self, error_message: str) -> None:
         self._set_running_state(False)
