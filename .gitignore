@@ -1,4 +1,7 @@
-__py_cache__
-./__py_cache__
+__pycache__
+./__pycache__
 *.pyc
 *.pyo
+**.csv
+./**/*.csv
+result.csv
