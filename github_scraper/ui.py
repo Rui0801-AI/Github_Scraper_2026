@@ -14,8 +14,8 @@ class GitHubScraperApp:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("GitHub Talent Scraper")
-        self.root.geometry("1120x720")
-        self.root.minsize(900, 560)
+        self.root.geometry("1120x920")
+        self.root.minsize(900, 760)
         self.root.configure(bg="#eef3f9")
 
         self.style = ttk.Style()
@@ -136,28 +136,8 @@ class GitHubScraperApp:
         shell.columnconfigure(0, weight=1)
         shell.rowconfigure(0, weight=1)
 
-        canvas = tk.Canvas(
-            shell,
-            background="#f7f9fc",
-            highlightthickness=0,
-            borderwidth=0,
-        )
-        scrollbar = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-
-        outer = ttk.Frame(canvas, style="Surface.TFrame", padding=16)
-        self._canvas_window = canvas.create_window((0, 0), window=outer, anchor="nw")
-        self._scroll_canvas = canvas
-
-        outer.bind(
-            "<Configure>",
-            lambda event: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.bind("<Configure>", self._resize_canvas_window)
-        canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        outer = ttk.Frame(shell, style="Surface.TFrame", padding=16)
+        outer.grid(row=0, column=0, sticky="nsew")
 
         outer.columnconfigure(0, weight=7)
         outer.columnconfigure(1, weight=4)
@@ -211,18 +191,18 @@ class GitHubScraperApp:
         ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 12))
 
         field_specs = [
-            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True, 4, 0),
-            ("Specific String Query", self.specific_query_var, "Optional. Add keywords like python recruiter or react.", False, 4, 1),
-            ("Location", self.location_var, "Required. Example: New York or Germany", False, 7, 0),
-            ("Creation Date", self.created_var, "Optional. Use YYYY-MM-DD", False, 7, 1),
-            ("Min Repos", self.min_repos_var, "Optional. Whole number", False, 10, 0),
-            ("Max Repos", self.max_repos_var, "Optional. Whole number", False, 10, 1),
-            ("Min Followers", self.min_followers_var, "Optional. Whole number", False, 13, 0),
-            ("Max Followers", self.max_followers_var, "Optional. Whole number", False, 13, 1),
+            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True, False, 4, 0),
+            ("Specific String Query", self.specific_query_var, "Optional. Add keywords like python recruiter or react.", False, False, 4, 1),
+            ("Location", self.location_var, "Required. Example: New York or Germany", False, True, 7, 0),
+            ("Creation Date", self.created_var, "Optional. Use YYYY-MM-DD", False, False, 7, 1),
+            ("Min Repos", self.min_repos_var, "Optional. Whole number", False, False, 10, 0),
+            ("Max Repos", self.max_repos_var, "Optional. Whole number", False, False, 10, 1),
+            ("Min Followers", self.min_followers_var, "Optional. Whole number", False, False, 13, 0),
+            ("Max Followers", self.max_followers_var, "Optional. Whole number", False, False, 13, 1),
         ]
 
-        for label, variable, hint, masked, row, column in field_specs:
-            self._build_field(card, row, column, label, variable, hint, masked)
+        for label, variable, hint, masked, required, row, column in field_specs:
+            self._build_field(card, row, column, label, variable, hint, masked, required)
 
         action_row = 16
         actions = ttk.Frame(card, style="Card.TFrame")
@@ -335,6 +315,7 @@ class GitHubScraperApp:
         variable: tk.StringVar,
         hint: str,
         masked: bool,
+        required: bool,
     ) -> None:
         field = ttk.Frame(parent, style="Card.TFrame")
         field.grid(
@@ -346,7 +327,8 @@ class GitHubScraperApp:
         )
         field.columnconfigure(0, weight=1)
 
-        ttk.Label(field, text=label, style="FieldLabel.TLabel").grid(row=0, column=0, sticky="w")
+        field_label = f"{label} *" if required else label
+        ttk.Label(field, text=field_label, style="FieldLabel.TLabel").grid(row=0, column=0, sticky="w")
         entry = ttk.Entry(
             field,
             textvariable=variable,
@@ -355,12 +337,6 @@ class GitHubScraperApp:
         )
         entry.grid(row=1, column=0, sticky="ew", pady=(6, 0), ipady=2)
         ttk.Label(field, text=hint, style="Hint.TLabel").grid(row=2, column=0, sticky="w", pady=(4, 0))
-
-    def _resize_canvas_window(self, event: tk.Event) -> None:
-        self._scroll_canvas.itemconfigure(self._canvas_window, width=event.width)
-
-    def _on_mousewheel(self, event: tk.Event) -> None:
-        self._scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def _clear_filters(self) -> None:
         if self.is_running:
