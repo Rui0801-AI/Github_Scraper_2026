@@ -401,7 +401,8 @@ class GitHubScraperApp:
             exported_count = export_profiles_to_csv(details, str(RESULT_CSV_PATH))
             self.root.after(0, lambda: self._handle_success(exported_count))
         except Exception as exc:  # noqa: BLE001
-            self.root.after(0, lambda: self._handle_error(str(exc)))
+            error_message = str(exc)
+            self.root.after(0, lambda: self._handle_error(error_message))
 
     def _queue_progress(self, current: int, total: int, message: str) -> None:
         self.root.after(0, lambda: self._update_progress(current, total, message))
