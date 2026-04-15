@@ -33,7 +33,15 @@ def _load_existing_usernames(file_path: Path) -> set[str]:
         return {row["username"] for row in reader if row.get("username")}
 
 
-def export_profiles_to_csv(details: list[dict], file_path: str) -> int:
+def _matches_contact_mode(email: str, linkedin: str, contact_mode: str) -> bool:
+    if contact_mode == "email":
+        return bool(email)
+    if contact_mode == "linkedin":
+        return bool(linkedin)
+    return bool(email) and bool(linkedin)
+
+
+def export_profiles_to_csv(details: list[dict], file_path: str, contact_mode: str) -> int:
     csv_path = Path(file_path)
     seen = _load_existing_usernames(csv_path)
     appended_count = 0
@@ -51,7 +59,7 @@ def export_profiles_to_csv(details: list[dict], file_path: str) -> int:
 
             email = detail.get("email") or extract_email(detail.get("bio"))
             linkedin = extract_linkedin(detail.get("blog"), detail.get("bio"))
-            if not email and not linkedin:
+            if not _matches_contact_mode(email, linkedin, contact_mode):
                 continue
 
             seen.add(username)
