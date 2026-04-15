@@ -4,7 +4,9 @@ import asyncio
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import messagebox
+
+import customtkinter as ctk
 
 from github_scraper.exporter import export_profiles_to_csv
 from github_scraper.models import SearchFilters
@@ -16,110 +18,20 @@ RESULT_CSV_PATH = Path(__file__).resolve().parent.parent / "result.csv"
 
 class GitHubScraperApp:
     def __init__(self) -> None:
-        self.root = tk.Tk()
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
+
+        self.root = ctk.CTk()
         self.root.title("GitHub Talent Scraper")
-        self.root.geometry("1120x920")
-        self.root.minsize(900, 760)
-        self.root.configure(bg="#eef3f9")
+        self.root.geometry("1180x1000")
+        self.root.minsize(1080, 940)
+        self.root.configure(fg_color="#eef3f8")
 
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
-
-        self._configure_styles()
         self._create_variables()
         self._build_layout()
+        self._center_window()
 
         self.is_running = False
-
-    def _configure_styles(self) -> None:
-        self.style.configure(".", font=("Segoe UI", 10))
-        self.style.configure("Surface.TFrame", background="#f7f9fc")
-        self.style.configure("Card.TFrame", background="#ffffff")
-        self.style.configure("Hero.TFrame", background="#dce8f9")
-        self.style.configure(
-            "SectionTitle.TLabel",
-            font=("Segoe UI Semibold", 12),
-            background="#ffffff",
-            foreground="#15304d",
-        )
-        self.style.configure(
-            "Body.TLabel",
-            font=("Segoe UI", 10),
-            background="#ffffff",
-            foreground="#425466",
-        )
-        self.style.configure(
-            "HeroTitle.TLabel",
-            font=("Segoe UI Semibold", 24),
-            background="#dce8f9",
-            foreground="#0f2740",
-        )
-        self.style.configure(
-            "HeroText.TLabel",
-            font=("Segoe UI", 11),
-            background="#dce8f9",
-            foreground="#3d556f",
-        )
-        self.style.configure(
-            "FieldLabel.TLabel",
-            font=("Segoe UI Semibold", 10),
-            background="#ffffff",
-            foreground="#2a3f55",
-        )
-        self.style.configure(
-            "Hint.TLabel",
-            font=("Segoe UI", 9),
-            background="#ffffff",
-            foreground="#6a7f95",
-        )
-        self.style.configure(
-            "Modern.TEntry",
-            fieldbackground="#f6f8fb",
-            background="#f6f8fb",
-            foreground="#12263a",
-            bordercolor="#d7e1ec",
-            lightcolor="#d7e1ec",
-            darkcolor="#d7e1ec",
-            borderwidth=1,
-            padding=8,
-        )
-        self.style.map(
-            "Modern.TEntry",
-            bordercolor=[("focus", "#2f6fed")],
-            lightcolor=[("focus", "#2f6fed")],
-            darkcolor=[("focus", "#2f6fed")],
-        )
-        self.style.configure(
-            "Primary.TButton",
-            font=("Segoe UI Semibold", 10),
-            padding=(18, 12),
-            background="#2f6fed",
-            foreground="#ffffff",
-            borderwidth=0,
-        )
-        self.style.map(
-            "Primary.TButton",
-            background=[("active", "#1f5cd2"), ("disabled", "#aabfe7")],
-            foreground=[("disabled", "#f3f7ff")],
-        )
-        self.style.configure(
-            "Secondary.TButton",
-            font=("Segoe UI Semibold", 10),
-            padding=(16, 12),
-            background="#edf3ff",
-            foreground="#2857b7",
-            borderwidth=0,
-        )
-        self.style.map("Secondary.TButton", background=[("active", "#dde9ff")])
-        self.style.configure(
-            "Modern.Horizontal.TProgressbar",
-            troughcolor="#e7edf5",
-            background="#2f6fed",
-            thickness=10,
-            borderwidth=0,
-            lightcolor="#2f6fed",
-            darkcolor="#2f6fed",
-        )
 
     def _create_variables(self) -> None:
         self.token_var = tk.StringVar()
@@ -130,217 +42,322 @@ class GitHubScraperApp:
         self.max_repos_var = tk.StringVar()
         self.min_followers_var = tk.StringVar()
         self.max_followers_var = tk.StringVar()
-        self.status_var = tk.StringVar(value="Ready to search GitHub profiles.")
+        self.contact_mode_var = tk.StringVar(value="both")
+        self.status_var = tk.StringVar(value="Ready")
         self.progress_text_var = tk.StringVar(value="0 / 0")
-        self.result_var = tk.StringVar(value=f"Appends to\n{RESULT_CSV_PATH}")
+        self.progress_percent_var = tk.StringVar(value="0%")
+        self.result_var = tk.StringVar(value=str(RESULT_CSV_PATH))
 
     def _build_layout(self) -> None:
-        shell = ttk.Frame(self.root, style="Surface.TFrame", padding=14)
-        shell.pack(fill="both", expand=True)
-        shell.columnconfigure(0, weight=1)
-        shell.rowconfigure(0, weight=1)
-
-        outer = ttk.Frame(shell, style="Surface.TFrame", padding=16)
-        outer.grid(row=0, column=0, sticky="nsew")
-
-        outer.columnconfigure(0, weight=7)
-        outer.columnconfigure(1, weight=4)
-        outer.rowconfigure(1, weight=1)
-
-        self._build_hero(outer)
-        self._build_form_card(outer)
-        self._build_info_card(outer)
-
-    def _build_hero(self, parent: ttk.Frame) -> None:
-        hero = ttk.Frame(parent, style="Hero.TFrame", padding=18)
-        hero.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 14))
-        hero.columnconfigure(0, weight=1)
-
-        ttk.Label(hero, text="GitHub Talent Scraper", style="HeroTitle.TLabel").grid(
-            row=0, column=0, sticky="w"
+        shell = ctk.CTkFrame(
+            self.root,
+            fg_color="#ffffff",
+            corner_radius=24,
+            border_width=1,
+            border_color="#dde6f0",
         )
-        ttk.Label(
-            hero,
-            text=(
-                "Search by location, activity, and audience size, then export a clean CSV "
-                "with emails and LinkedIn links when available."
-            ),
-            style="HeroText.TLabel",
-            wraplength=740,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        shell.pack(fill="both", expand=True, padx=18, pady=18)
+        shell.grid_columnconfigure(0, weight=7)
+        shell.grid_columnconfigure(1, weight=3)
+        shell.grid_rowconfigure(1, weight=1)
 
-    def _build_form_card(self, parent: ttk.Frame) -> None:
-        card = ttk.Frame(parent, style="Card.TFrame", padding=18)
-        card.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
-        card.columnconfigure(0, weight=1)
-        card.columnconfigure(1, weight=1)
+        self._build_topbar(shell)
+        self._build_form_panel(shell)
+        self._build_side_panel(shell)
 
-        ttk.Label(card, text="Search Filters", style="SectionTitle.TLabel").grid(
-            row=0, column=0, columnspan=2, sticky="w"
-        )
-        ttk.Label(
-            card,
-            text="Define the audience you want to export. Required filters are called out separately from optional ones.",
-            style="Body.TLabel",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
+    def _build_topbar(self, parent: ctk.CTkFrame) -> None:
+        topbar = ctk.CTkFrame(parent, fg_color="transparent")
+        topbar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=24, pady=(24, 18))
+        topbar.grid_columnconfigure(0, weight=1)
 
-        ttk.Label(card, text="Required Option", style="SectionTitle.TLabel").grid(
-            row=2, column=0, columnspan=2, sticky="w"
-        )
-        ttk.Label(
-            card,
-            text="Location is required. All other fields below are optional and help narrow the search.",
-            style="Hint.TLabel",
-        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 12))
+        ctk.CTkLabel(
+            topbar,
+            text="GitHub Talent Scraper",
+            font=ctk.CTkFont(size=26, weight="bold"),
+            text_color="#1b2b3d",
+        ).grid(row=0, column=0, sticky="w")
 
-        field_specs = [
-            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True, False, 4, 0),
-            ("Specific String Query", self.specific_query_var, "Optional. Add keywords like python recruiter or react.", False, False, 4, 1),
-            ("Location", self.location_var, "Required. Example: New York or Germany", False, True, 7, 0),
-            ("Creation Date", self.created_var, "Optional. Use YYYY-MM-DD", False, False, 7, 1),
-            ("Min Repos", self.min_repos_var, "Optional. Whole number", False, False, 10, 0),
-            ("Max Repos", self.max_repos_var, "Optional. Whole number", False, False, 10, 1),
-            ("Min Followers", self.min_followers_var, "Optional. Whole number", False, False, 13, 0),
-            ("Max Followers", self.max_followers_var, "Optional. Whole number", False, False, 13, 1),
+        stats = ctk.CTkFrame(topbar, fg_color="transparent")
+        stats.grid(row=0, column=1, sticky="e")
+
+        stat_specs = [
+            ("Location", "Required"),
+            ("result.csv", "Output"),
+            ("No duplicates", "Append only"),
         ]
+        for index, (value, label) in enumerate(stat_specs):
+            card = ctk.CTkFrame(
+                stats,
+                fg_color="#f4f8fc",
+                corner_radius=18,
+                border_width=1,
+                border_color="#dce5ef",
+            )
+            card.grid(row=0, column=index, padx=(12 if index else 0, 0), sticky="e")
+            ctk.CTkLabel(
+                card,
+                text=value,
+                font=ctk.CTkFont(size=16, weight="bold"),
+                text_color="#17324d",
+            ).pack(anchor="w", padx=16, pady=(12, 0))
+            ctk.CTkLabel(
+                card,
+                text=label,
+                font=ctk.CTkFont(size=11),
+                text_color="#71849a",
+            ).pack(anchor="w", padx=16, pady=(2, 12))
 
-        for label, variable, hint, masked, required, row, column in field_specs:
-            self._build_field(card, row, column, label, variable, hint, masked, required)
+    def _build_form_panel(self, parent: ctk.CTkFrame) -> None:
+        panel = ctk.CTkFrame(parent, fg_color="transparent")
+        panel.grid(row=1, column=0, sticky="nsew", padx=(24, 12), pady=(0, 24))
+        panel.grid_columnconfigure(0, weight=1)
+        panel.grid_columnconfigure(1, weight=1)
 
-        action_row = 16
-        actions = ttk.Frame(card, style="Card.TFrame")
-        actions.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=(12, 14))
-        actions.columnconfigure(0, weight=1)
-        actions.columnconfigure(1, weight=0)
+        ctk.CTkLabel(
+            panel,
+            text="Search Filters",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#223548",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
 
-        self.start_button = ttk.Button(
-            actions,
-            text="Export Profiles",
-            command=self._start_scrape,
-            style="Primary.TButton",
-        )
-        self.start_button.grid(row=0, column=0, sticky="w")
+        self._build_field(panel, 1, 0, "GitHub Token", self.token_var, masked=True, required=False)
+        self._build_field(panel, 1, 1, "Location", self.location_var, masked=False, required=True)
+        self._build_field(panel, 2, 0, "Specific Query", self.specific_query_var, masked=False, required=False)
+        self._build_field(panel, 2, 1, "Creation Date", self.created_var, masked=False, required=False)
+        self._build_field(panel, 3, 0, "Min Repos", self.min_repos_var, masked=False, required=False)
+        self._build_field(panel, 3, 1, "Max Repos", self.max_repos_var, masked=False, required=False)
+        self._build_field(panel, 4, 0, "Min Followers", self.min_followers_var, masked=False, required=False)
+        self._build_field(panel, 4, 1, "Max Followers", self.max_followers_var, masked=False, required=False)
 
-        ttk.Button(
-            actions,
-            text="Clear Filters",
-            command=self._clear_filters,
-            style="Secondary.TButton",
-        ).grid(row=0, column=1, sticky="e")
-
-        status_frame = ttk.Frame(card, style="Card.TFrame")
-        status_frame.grid(row=action_row + 1, column=0, columnspan=2, sticky="ew")
-        status_frame.columnconfigure(0, weight=1)
-
-        ttk.Label(status_frame, text="Status", style="FieldLabel.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(status_frame, textvariable=self.status_var, style="Body.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(4, 12)
-        )
-
-        self.progress = ttk.Progressbar(
-            status_frame,
-            mode="determinate",
-            style="Modern.Horizontal.TProgressbar",
-            maximum=100,
-            value=0,
-        )
-        self.progress.grid(row=2, column=0, sticky="ew")
-
-        ttk.Label(status_frame, textvariable=self.progress_text_var, style="Hint.TLabel").grid(
-            row=3, column=0, sticky="e", pady=(8, 0)
-        )
-
-    def _build_info_card(self, parent: ttk.Frame) -> None:
-        card = ttk.Frame(parent, style="Card.TFrame", padding=18)
-        card.grid(row=1, column=1, sticky="nsew")
-        card.columnconfigure(0, weight=1)
-
-        ttk.Label(card, text="Workspace", style="SectionTitle.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            card,
-            text=(
-                "Results are appended to the local result.csv file. Only profiles with a "
-                "public email or LinkedIn value are saved."
-            ),
-            style="Body.TLabel",
-            wraplength=280,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(4, 14))
-
-        summary = ttk.Frame(card, style="Hero.TFrame", padding=14)
-        summary.grid(row=2, column=0, sticky="ew")
-        summary.columnconfigure(0, weight=1)
-
-        ttk.Label(summary, text="Last Result", style="HeroText.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            summary,
-            textvariable=self.result_var,
-            style="HeroTitle.TLabel",
-            wraplength=250,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(8, 0))
-
-        tips = ttk.Frame(card, style="Card.TFrame")
-        tips.grid(row=3, column=0, sticky="ew", pady=(20, 0))
-        tips.columnconfigure(0, weight=1)
-
-        ttk.Label(tips, text="Search Tips", style="SectionTitle.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-
-        tip_lines = [
-            "Add a token for better GitHub API limits.",
-            "Use a recent created date to find newer profiles.",
-            "Follower and repo filters help narrow strong candidates.",
-        ]
-
-        for index, tip in enumerate(tip_lines, start=1):
-            ttk.Label(
-                tips,
-                text=f"- {tip}",
-                style="Body.TLabel",
-                wraplength=280,
-                justify="left",
-            ).grid(row=index, column=0, sticky="w", pady=(8 if index == 1 else 6, 0))
+        self._build_contact_mode(panel, 5)
+        self._build_actions(panel, 6)
+        self._build_progress(panel, 7)
 
     def _build_field(
         self,
-        parent: ttk.Frame,
+        parent: ctk.CTkFrame,
         row: int,
         column: int,
         label: str,
         variable: tk.StringVar,
-        hint: str,
         masked: bool,
         required: bool,
     ) -> None:
-        field = ttk.Frame(parent, style="Card.TFrame")
+        field = ctk.CTkFrame(parent, fg_color="transparent")
         field.grid(
             row=row,
             column=column,
             sticky="ew",
-            padx=(0, 8) if column == 0 else (8, 0),
-            pady=2,
+            padx=(0, 10) if column == 0 else (10, 0),
+            pady=(18, 0),
         )
-        field.columnconfigure(0, weight=1)
+        field.grid_columnconfigure(0, weight=1)
 
-        field_label = f"{label} *" if required else label
-        ttk.Label(field, text=field_label, style="FieldLabel.TLabel").grid(row=0, column=0, sticky="w")
-        entry = ttk.Entry(
+        title = f"{label} *" if required else label
+        ctk.CTkLabel(
+            field,
+            text=title,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#24374a",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        entry = ctk.CTkEntry(
             field,
             textvariable=variable,
             show="*" if masked else "",
-            style="Modern.TEntry",
+            height=42,
+            corner_radius=14,
+            fg_color="#f8fbfe",
+            border_color="#d7e1ec",
+            text_color="#13273a",
         )
-        entry.grid(row=1, column=0, sticky="ew", pady=(6, 0), ipady=2)
-        ttk.Label(field, text=hint, style="Hint.TLabel").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        entry.grid(row=1, column=0, sticky="ew")
+
+    def _build_contact_mode(self, parent: ctk.CTkFrame, row: int) -> None:
+        block = ctk.CTkFrame(parent, fg_color="transparent")
+        block.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(22, 0))
+        block.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            block,
+            text="Valid Contact Type",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#223548",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 10))
+
+        self.contact_segment = ctk.CTkSegmentedButton(
+            block,
+            values=["email", "linkedin", "both"],
+            variable=self.contact_mode_var,
+            height=40,
+            corner_radius=14,
+            fg_color="#e8eef7",
+            selected_color="#2f6fed",
+            selected_hover_color="#245ed5",
+            unselected_color="#e8eef7",
+            unselected_hover_color="#dce6f4",
+            text_color="#1f3555",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        self.contact_segment.grid(row=1, column=0, sticky="ew")
+        self.contact_segment.set("both")
+
+    def _build_actions(self, parent: ctk.CTkFrame, row: int) -> None:
+        actions = ctk.CTkFrame(parent, fg_color="transparent")
+        actions.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(24, 0))
+        actions.grid_columnconfigure(0, weight=1)
+
+        self.start_button = ctk.CTkButton(
+            actions,
+            text="Export Matching Profiles",
+            command=self._start_scrape,
+            height=42,
+            corner_radius=14,
+            fg_color="#2f6fed",
+            hover_color="#245ed5",
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        self.start_button.grid(row=0, column=0, sticky="w")
+
+        ctk.CTkButton(
+            actions,
+            text="Clear",
+            command=self._clear_filters,
+            height=42,
+            corner_radius=14,
+            fg_color="#eaf1fb",
+            hover_color="#dce7f7",
+            text_color="#2958ab",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).grid(row=0, column=1, sticky="e", padx=(12, 0))
+
+    def _build_progress(self, parent: ctk.CTkFrame, row: int) -> None:
+        card = ctk.CTkFrame(
+            parent,
+            fg_color="#f5f8fc",
+            corner_radius=18,
+            border_width=1,
+            border_color="#dce5ef",
+        )
+        card.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(20, 0))
+        card.grid_columnconfigure(0, weight=1)
+
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=18, pady=(16, 0))
+        top.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            top,
+            text="Progress",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#203548",
+        ).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(
+            top,
+            textvariable=self.progress_percent_var,
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color="#18324f",
+        ).grid(row=0, column=1, sticky="e")
+
+        ctk.CTkLabel(
+            card,
+            textvariable=self.status_var,
+            font=ctk.CTkFont(size=11),
+            text_color="#6b8198",
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(6, 12))
+
+        self.progress = ctk.CTkProgressBar(
+            card,
+            height=12,
+            corner_radius=999,
+            fg_color="#dce7f4",
+            progress_color="#2f6fed",
+        )
+        self.progress.grid(row=2, column=0, sticky="ew", padx=18)
+        self.progress.set(0)
+
+        ctk.CTkLabel(
+            card,
+            textvariable=self.progress_text_var,
+            font=ctk.CTkFont(size=11),
+            text_color="#6b8198",
+        ).grid(row=3, column=0, sticky="e", padx=18, pady=(8, 16))
+
+    def _build_side_panel(self, parent: ctk.CTkFrame) -> None:
+        panel = ctk.CTkFrame(parent, fg_color="transparent")
+        panel.grid(row=1, column=1, sticky="nsew", padx=(12, 24), pady=(0, 24))
+        panel.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            panel,
+            text="Output",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#223548",
+        ).grid(row=0, column=0, sticky="w")
+
+        result_card = ctk.CTkFrame(
+            panel,
+            fg_color="#f5f8fc",
+            corner_radius=18,
+            border_width=1,
+            border_color="#dce5ef",
+        )
+        result_card.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        ctk.CTkLabel(
+            result_card,
+            text="result.csv",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            text_color="#18324f",
+        ).pack(anchor="w", padx=16, pady=(16, 0))
+        ctk.CTkLabel(
+            result_card,
+            textvariable=self.result_var,
+            font=ctk.CTkFont(size=11),
+            text_color="#6b8198",
+            justify="left",
+            wraplength=260,
+        ).pack(anchor="w", padx=16, pady=(6, 16))
+
+        rules = ctk.CTkFrame(
+            panel,
+            fg_color="#f5f8fc",
+            corner_radius=18,
+            border_width=1,
+            border_color="#dce5ef",
+        )
+        rules.grid(row=2, column=0, sticky="ew", pady=(14, 0))
+        ctk.CTkLabel(
+            rules,
+            text="Save Rules",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#223548",
+        ).pack(anchor="w", padx=16, pady=(16, 0))
+
+        for line in (
+            "Location is required.",
+            "Contact mode controls what gets saved.",
+            "Duplicate usernames are skipped.",
+        ):
+            ctk.CTkLabel(
+                rules,
+                text=f"- {line}",
+                font=ctk.CTkFont(size=11),
+                text_color="#6b8198",
+                justify="left",
+                wraplength=260,
+            ).pack(anchor="w", padx=16, pady=(8, 0))
+        ctk.CTkLabel(rules, text="", height=10).pack()
+
+    def _center_window(self) -> None:
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x_pos = max((screen_width - width) // 2, 0)
+        y_pos = max((screen_height - height) // 2, 0)
+        self.root.geometry(f"{width}x{height}+{x_pos}+{y_pos}")
 
     def _clear_filters(self) -> None:
         if self.is_running:
@@ -358,9 +375,11 @@ class GitHubScraperApp:
         ):
             variable.set("")
 
-        self.status_var.set("Ready to search GitHub profiles.")
+        self.contact_mode_var.set("both")
+        self.status_var.set("Ready")
         self.progress_text_var.set("0 / 0")
-        self.progress.configure(value=0, maximum=100)
+        self.progress_percent_var.set("0%")
+        self.progress.set(0)
 
     def _collect_filters(self) -> SearchFilters:
         return SearchFilters(
@@ -384,40 +403,45 @@ class GitHubScraperApp:
             return
 
         self._set_running_state(True)
-        self.status_var.set("Preparing GitHub search...")
+        self.status_var.set("Preparing search...")
         self.progress_text_var.set("0 / 0")
-        self.progress.configure(value=0, maximum=100)
+        self.progress_percent_var.set("0%")
+        self.progress.set(0)
 
         worker = threading.Thread(
             target=self._scrape_worker,
-            args=(filters, self.token_var.get().strip()),
+            args=(filters, self.token_var.get().strip(), self.contact_mode_var.get()),
             daemon=True,
         )
         worker.start()
 
-    def _scrape_worker(self, filters: SearchFilters, token: str) -> None:
+    def _scrape_worker(self, filters: SearchFilters, token: str, contact_mode: str) -> None:
         try:
             details = asyncio.run(scrape_users(filters, token, self._queue_progress))
-            exported_count = export_profiles_to_csv(details, str(RESULT_CSV_PATH))
+            exported_count = export_profiles_to_csv(details, str(RESULT_CSV_PATH), contact_mode)
             self.root.after(0, lambda: self._handle_success(exported_count))
         except Exception as exc:  # noqa: BLE001
-            self.root.after(0, lambda: self._handle_error(str(exc)))
+            error_message = str(exc)
+            self.root.after(0, lambda: self._handle_error(error_message))
 
     def _queue_progress(self, current: int, total: int, message: str) -> None:
         self.root.after(0, lambda: self._update_progress(current, total, message))
 
     def _update_progress(self, current: int, total: int, message: str) -> None:
         maximum = total if total > 0 else 1
-        self.progress.configure(maximum=maximum, value=current)
+        percentage = current / maximum if maximum else 0
+        self.progress.set(percentage)
         self.progress_text_var.set(f"{current} / {total}")
+        self.progress_percent_var.set(f"{int(percentage * 100)}%")
         self.status_var.set(message)
 
     def _handle_success(self, exported_count: int) -> None:
         self._set_running_state(False)
-        self.progress.configure(value=self.progress["maximum"])
+        self.progress.set(1)
         self.progress_text_var.set(f"{exported_count} appended")
-        self.status_var.set("Export complete.")
-        self.result_var.set(f"{exported_count} profiles appended\n{RESULT_CSV_PATH}")
+        self.progress_percent_var.set("100%")
+        self.status_var.set("Export complete")
+        self.result_var.set(f"{RESULT_CSV_PATH}\n{exported_count} profiles appended")
         messagebox.showinfo(
             "Export Complete",
             f"Appended {exported_count} new profiles to:\n{RESULT_CSV_PATH}",
@@ -425,7 +449,9 @@ class GitHubScraperApp:
 
     def _handle_error(self, error_message: str) -> None:
         self._set_running_state(False)
-        self.status_var.set("The export could not be completed.")
+        self.progress.set(0)
+        self.progress_percent_var.set("0%")
+        self.status_var.set("Export failed")
         messagebox.showerror("Export Failed", error_message)
 
     def _set_running_state(self, is_running: bool) -> None:
