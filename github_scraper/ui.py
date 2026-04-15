@@ -119,6 +119,7 @@ class GitHubScraperApp:
 
     def _create_variables(self) -> None:
         self.token_var = tk.StringVar()
+        self.specific_query_var = tk.StringVar()
         self.location_var = tk.StringVar()
         self.created_var = tk.StringVar()
         self.min_repos_var = tk.StringVar()
@@ -196,26 +197,34 @@ class GitHubScraperApp:
         )
         ttk.Label(
             card,
-            text="Define the audience you want to export. Only location is required.",
+            text="Define the audience you want to export. Required filters are called out separately from optional ones.",
             style="Body.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
 
+        ttk.Label(card, text="Required Option", style="SectionTitle.TLabel").grid(
+            row=2, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(
+            card,
+            text="Location is required. All other fields below are optional and help narrow the search.",
+            style="Hint.TLabel",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 12))
+
         field_specs = [
-            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True),
-            ("Location", self.location_var, "Example: New York or Germany", False),
-            ("Created After", self.created_var, "Use YYYY-MM-DD", False),
-            ("Min Repos", self.min_repos_var, "Whole number", False),
-            ("Max Repos", self.max_repos_var, "Whole number", False),
-            ("Min Followers", self.min_followers_var, "Whole number", False),
-            ("Max Followers", self.max_followers_var, "Whole number", False),
+            ("GitHub Token", self.token_var, "Optional, but recommended to avoid rate limits.", True, 4, 0),
+            ("Specific String Query", self.specific_query_var, "Optional. Add keywords like python recruiter or react.", False, 4, 1),
+            ("Location", self.location_var, "Required. Example: New York or Germany", False, 7, 0),
+            ("Creation Date", self.created_var, "Optional. Use YYYY-MM-DD", False, 7, 1),
+            ("Min Repos", self.min_repos_var, "Optional. Whole number", False, 10, 0),
+            ("Max Repos", self.max_repos_var, "Optional. Whole number", False, 10, 1),
+            ("Min Followers", self.min_followers_var, "Optional. Whole number", False, 13, 0),
+            ("Max Followers", self.max_followers_var, "Optional. Whole number", False, 13, 1),
         ]
 
-        for index, (label, variable, hint, masked) in enumerate(field_specs):
-            column = index % 2
-            row = 2 + (index // 2) * 3
+        for label, variable, hint, masked, row, column in field_specs:
             self._build_field(card, row, column, label, variable, hint, masked)
 
-        action_row = 2 + ((len(field_specs) + 1) // 2) * 3
+        action_row = 16
         actions = ttk.Frame(card, style="Card.TFrame")
         actions.grid(row=action_row, column=0, columnspan=2, sticky="ew", pady=(12, 14))
         actions.columnconfigure(0, weight=1)
@@ -359,6 +368,7 @@ class GitHubScraperApp:
 
         for variable in (
             self.token_var,
+            self.specific_query_var,
             self.location_var,
             self.created_var,
             self.min_repos_var,
@@ -375,6 +385,7 @@ class GitHubScraperApp:
     def _collect_filters(self) -> SearchFilters:
         return SearchFilters(
             location=self.location_var.get().strip(),
+            specific_query=self.specific_query_var.get().strip(),
             created_after=self.created_var.get().strip(),
             min_repos=self.min_repos_var.get().strip(),
             max_repos=self.max_repos_var.get().strip(),
