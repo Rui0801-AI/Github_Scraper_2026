@@ -1,0 +1,1 @@
+"""GitHub scraper application package."""
