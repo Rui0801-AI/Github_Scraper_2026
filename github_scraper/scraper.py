@@ -19,6 +19,9 @@ def build_headers(token: str) -> dict[str, str]:
 def build_query(filters: SearchFilters) -> str:
     query = f'location:"{filters.location}"'
 
+    if filters.specific_query:
+        query += f" {filters.specific_query}"
+
     if filters.created_after:
         query += f" created:>{filters.created_after}"
 
