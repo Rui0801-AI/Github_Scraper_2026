@@ -4,16 +4,24 @@ import asyncio
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from github_scraper.exporter import export_profiles_to_csv
-from github_scraper.models import SearchFilters
+from github_scraper.exporter import export_profiles
+from github_scraper.models import (
+    DESTINATION_GOOGLE_SHEET,
+    DESTINATION_LOCAL,
+    ExportSettings,
+    SearchFilters,
+)
 from github_scraper.scraper import scrape_users
 
 
 RESULT_CSV_PATH = Path(__file__).resolve().parent.parent / "result.csv"
+SIDE_PANEL_WIDTH = 360
+WINDOW_WIDTH = 1180
+WINDOW_HEIGHT = 950
 
 
 class GitHubScraperApp:
@@ -23,13 +31,15 @@ class GitHubScraperApp:
 
         self.root = ctk.CTk()
         self.root.title("GitHub Talent Scraper")
-        self.root.geometry("1180x1000")
-        self.root.minsize(1080, 940)
+        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
+        self.root.minsize(1080, 930)
         self.root.configure(fg_color="#eef3f8")
 
         self._create_variables()
         self._build_layout()
+        self._refresh_destination_ui()
         self._center_window()
+        self.root.after(100, self._center_window)
 
         self.is_running = False
 
@@ -43,10 +53,30 @@ class GitHubScraperApp:
         self.min_followers_var = tk.StringVar()
         self.max_followers_var = tk.StringVar()
         self.contact_mode_var = tk.StringVar(value="both")
+        self.destination_var = tk.StringVar(value=DESTINATION_LOCAL)
+        self.local_result_var = tk.StringVar(value=str(RESULT_CSV_PATH))
+        self.google_sheet_var = tk.StringVar()
+        self.google_sheet_tab_var = tk.StringVar(value="Sheet1")
+        self.google_apps_script_var = tk.StringVar()
+        self.google_credentials_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Ready")
         self.progress_text_var = tk.StringVar(value="0 / 0")
         self.progress_percent_var = tk.StringVar(value="0%")
         self.result_var = tk.StringVar(value=str(RESULT_CSV_PATH))
+        self.output_title_var = tk.StringVar(value="Local CSV")
+
+        for variable in (
+            self.destination_var,
+            self.local_result_var,
+            self.google_sheet_var,
+            self.google_sheet_tab_var,
+            self.google_apps_script_var,
+        ):
+            variable.trace_add("write", self._handle_destination_change)
+
+    def _handle_destination_change(self, *_args: object) -> None:
+        if hasattr(self, "root"):
+            self.root.after_idle(self._refresh_destination_ui)
 
     def _build_layout(self) -> None:
         shell = ctk.CTkFrame(
@@ -57,8 +87,8 @@ class GitHubScraperApp:
             border_color="#dde6f0",
         )
         shell.pack(fill="both", expand=True, padx=18, pady=18)
-        shell.grid_columnconfigure(0, weight=7)
-        shell.grid_columnconfigure(1, weight=3)
+        shell.grid_columnconfigure(0, weight=1)
+        shell.grid_columnconfigure(1, minsize=SIDE_PANEL_WIDTH)
         shell.grid_rowconfigure(1, weight=1)
 
         self._build_topbar(shell)
@@ -82,7 +112,7 @@ class GitHubScraperApp:
 
         stat_specs = [
             ("Location", "Required"),
-            ("result.csv", "Output"),
+            ("CSV or Sheet", "Output"),
             ("No duplicates", "Append only"),
         ]
         for index, (value, label) in enumerate(stat_specs):
@@ -285,9 +315,10 @@ class GitHubScraperApp:
         ).grid(row=3, column=0, sticky="e", padx=18, pady=(8, 16))
 
     def _build_side_panel(self, parent: ctk.CTkFrame) -> None:
-        panel = ctk.CTkFrame(parent, fg_color="transparent")
+        panel = ctk.CTkFrame(parent, fg_color="transparent", width=SIDE_PANEL_WIDTH)
         panel.grid(row=1, column=1, sticky="nsew", padx=(12, 24), pady=(0, 24))
-        panel.grid_columnconfigure(0, weight=1)
+        panel.grid_columnconfigure(0, weight=1, minsize=SIDE_PANEL_WIDTH)
+        panel.grid_propagate(False)
 
         ctk.CTkLabel(
             panel,
@@ -296,17 +327,168 @@ class GitHubScraperApp:
             text_color="#223548",
         ).grid(row=0, column=0, sticky="w")
 
-        result_card = ctk.CTkFrame(
+        destination_card = ctk.CTkFrame(
             panel,
             fg_color="#f5f8fc",
+            width=SIDE_PANEL_WIDTH,
             corner_radius=18,
             border_width=1,
             border_color="#dce5ef",
         )
-        result_card.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        destination_card.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        destination_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            destination_card,
+            text="Save Location",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#223548",
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(16, 10))
+
+        self.destination_segment = ctk.CTkSegmentedButton(
+            destination_card,
+            values=[DESTINATION_LOCAL, DESTINATION_GOOGLE_SHEET],
+            variable=self.destination_var,
+            command=lambda _value: self._refresh_destination_ui(),
+            height=38,
+            corner_radius=14,
+            fg_color="#e8eef7",
+            selected_color="#2f6fed",
+            selected_hover_color="#245ed5",
+            unselected_color="#e8eef7",
+            unselected_hover_color="#dce6f4",
+            text_color="#1f3555",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        self.destination_segment.grid(row=1, column=0, sticky="ew", padx=16)
+
+        self.local_settings_frame = ctk.CTkFrame(destination_card, fg_color="transparent")
+        self.local_settings_frame.grid(row=2, column=0, sticky="ew", padx=16, pady=(14, 0))
+        self.local_settings_frame.grid_columnconfigure(0, weight=1)
+        self.local_settings_frame.grid_columnconfigure(1, weight=0)
+        ctk.CTkLabel(
+            self.local_settings_frame,
+            text="CSV File",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#24374a",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ctk.CTkEntry(
+            self.local_settings_frame,
+            textvariable=self.local_result_var,
+            height=42,
+            corner_radius=14,
+            fg_color="#ffffff",
+            border_color="#d7e1ec",
+            text_color="#13273a",
+        ).grid(row=1, column=0, sticky="ew")
+        ctk.CTkButton(
+            self.local_settings_frame,
+            text="Browse",
+            command=self._browse_local_file,
+            width=92,
+            height=38,
+            corner_radius=14,
+            fg_color="#eaf1fb",
+            hover_color="#dce7f7",
+            text_color="#2958ab",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).grid(row=1, column=1, padx=(10, 0))
+
+        self.sheet_settings_frame = ctk.CTkFrame(destination_card, fg_color="transparent")
+        self.sheet_settings_frame.grid(row=3, column=0, sticky="ew", padx=16, pady=(14, 0))
+        self.sheet_settings_frame.grid_columnconfigure(0, weight=1)
+        self.sheet_settings_frame.grid_columnconfigure(1, weight=0)
+        ctk.CTkLabel(
+            self.sheet_settings_frame,
+            text="Spreadsheet URL or ID",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#24374a",
+            wraplength=SIDE_PANEL_WIDTH - 56,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ctk.CTkEntry(
+            self.sheet_settings_frame,
+            textvariable=self.google_sheet_var,
+            height=42,
+            corner_radius=14,
+            fg_color="#ffffff",
+            border_color="#d7e1ec",
+            text_color="#13273a",
+        ).grid(row=1, column=0, sticky="ew")
+        ctk.CTkLabel(
+            self.sheet_settings_frame,
+            text="Worksheet Name",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#24374a",
+        ).grid(row=2, column=0, sticky="w", pady=(14, 8))
+        ctk.CTkEntry(
+            self.sheet_settings_frame,
+            textvariable=self.google_sheet_tab_var,
+            height=42,
+            corner_radius=14,
+            fg_color="#ffffff",
+            border_color="#d7e1ec",
+            text_color="#13273a",
+        ).grid(row=3, column=0, sticky="ew")
+        ctk.CTkLabel(
+            self.sheet_settings_frame,
+            text="Apps Script Web App URL",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#24374a",
+            wraplength=SIDE_PANEL_WIDTH - 56,
+            justify="left",
+        ).grid(row=4, column=0, sticky="w", pady=(14, 8))
+        ctk.CTkEntry(
+            self.sheet_settings_frame,
+            textvariable=self.google_apps_script_var,
+            height=42,
+            corner_radius=14,
+            fg_color="#ffffff",
+            border_color="#d7e1ec",
+            text_color="#13273a",
+        ).grid(row=5, column=0, columnspan=2, sticky="ew")
+        ctk.CTkLabel(
+            self.sheet_settings_frame,
+            text="Service Account JSON (Optional Fallback)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#24374a",
+            wraplength=SIDE_PANEL_WIDTH - 56,
+            justify="left",
+        ).grid(row=6, column=0, sticky="w", pady=(14, 8))
+        ctk.CTkEntry(
+            self.sheet_settings_frame,
+            textvariable=self.google_credentials_var,
+            height=42,
+            corner_radius=14,
+            fg_color="#ffffff",
+            border_color="#d7e1ec",
+            text_color="#13273a",
+        ).grid(row=7, column=0, sticky="ew")
+        ctk.CTkButton(
+            self.sheet_settings_frame,
+            text="Browse",
+            command=self._browse_credentials_file,
+            width=92,
+            height=38,
+            corner_radius=14,
+            fg_color="#eaf1fb",
+            hover_color="#dce7f7",
+            text_color="#2958ab",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).grid(row=7, column=1, padx=(10, 0))
+
+        result_card = ctk.CTkFrame(
+            panel,
+            fg_color="#f5f8fc",
+            width=SIDE_PANEL_WIDTH,
+            corner_radius=18,
+            border_width=1,
+            border_color="#dce5ef",
+        )
+        result_card.grid(row=2, column=0, sticky="ew", pady=(14, 0))
         ctk.CTkLabel(
             result_card,
-            text="result.csv",
+            textvariable=self.output_title_var,
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color="#18324f",
         ).pack(anchor="w", padx=16, pady=(16, 0))
@@ -316,43 +498,47 @@ class GitHubScraperApp:
             font=ctk.CTkFont(size=11),
             text_color="#6b8198",
             justify="left",
-            wraplength=260,
+            wraplength=SIDE_PANEL_WIDTH - 68,
         ).pack(anchor="w", padx=16, pady=(6, 16))
 
-        rules = ctk.CTkFrame(
-            panel,
-            fg_color="#f5f8fc",
-            corner_radius=18,
-            border_width=1,
-            border_color="#dce5ef",
+    def _browse_local_file(self) -> None:
+        file_path = filedialog.asksaveasfilename(
+            title="Choose CSV file",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            initialfile=Path(self.local_result_var.get() or RESULT_CSV_PATH).name,
         )
-        rules.grid(row=2, column=0, sticky="ew", pady=(14, 0))
-        ctk.CTkLabel(
-            rules,
-            text="Save Rules",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="#223548",
-        ).pack(anchor="w", padx=16, pady=(16, 0))
+        if file_path:
+            self.local_result_var.set(file_path)
+            self._refresh_destination_ui()
 
-        for line in (
-            "Location is required.",
-            "Contact mode controls what gets saved.",
-            "Duplicate usernames are skipped.",
-        ):
-            ctk.CTkLabel(
-                rules,
-                text=f"- {line}",
-                font=ctk.CTkFont(size=11),
-                text_color="#6b8198",
-                justify="left",
-                wraplength=260,
-            ).pack(anchor="w", padx=16, pady=(8, 0))
-        ctk.CTkLabel(rules, text="", height=10).pack()
+    def _browse_credentials_file(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="Choose service account JSON",
+            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")],
+        )
+        if file_path:
+            self.google_credentials_var.set(file_path)
+            self._refresh_destination_ui()
+
+    def _refresh_destination_ui(self) -> None:
+        destination = self.destination_var.get()
+        if destination == DESTINATION_GOOGLE_SHEET:
+            self.local_settings_frame.grid_remove()
+            self.sheet_settings_frame.grid()
+            self.output_title_var.set("Google Sheet")
+            target = self.google_sheet_var.get().strip() or "Waiting for spreadsheet URL or ID"
+            self.result_var.set(target)
+        else:
+            self.sheet_settings_frame.grid_remove()
+            self.local_settings_frame.grid()
+            self.output_title_var.set("Local CSV")
+            self.result_var.set(self.local_result_var.get().strip() or str(RESULT_CSV_PATH))
 
     def _center_window(self) -> None:
         self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
+        width = max(self.root.winfo_width(), self.root.winfo_reqwidth(), WINDOW_WIDTH)
+        height = max(self.root.winfo_height(), self.root.winfo_reqheight(), WINDOW_HEIGHT)
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         x_pos = max((screen_width - width) // 2, 0)
@@ -380,6 +566,7 @@ class GitHubScraperApp:
         self.progress_text_var.set("0 / 0")
         self.progress_percent_var.set("0%")
         self.progress.set(0)
+        self._refresh_destination_ui()
 
     def _collect_filters(self) -> SearchFilters:
         return SearchFilters(
@@ -392,6 +579,16 @@ class GitHubScraperApp:
             max_followers=self.max_followers_var.get().strip(),
         )
 
+    def _collect_export_settings(self) -> ExportSettings:
+        return ExportSettings(
+            destination=self.destination_var.get().strip(),
+            local_path=self.local_result_var.get().strip(),
+            spreadsheet_id_or_url=self.google_sheet_var.get().strip(),
+            worksheet_name=self.google_sheet_tab_var.get().strip(),
+            apps_script_url=self.google_apps_script_var.get().strip(),
+            service_account_file=self.google_credentials_var.get().strip(),
+        )
+
     def _start_scrape(self) -> None:
         if self.is_running:
             return
@@ -402,24 +599,37 @@ class GitHubScraperApp:
             messagebox.showerror("Invalid Filters", error)
             return
 
+        export_settings = self._collect_export_settings()
+        export_error = export_settings.validate()
+        if export_error:
+            messagebox.showerror("Invalid Save Location", export_error)
+            return
+
         self._set_running_state(True)
         self.status_var.set("Preparing search...")
         self.progress_text_var.set("0 / 0")
         self.progress_percent_var.set("0%")
         self.progress.set(0)
+        self._refresh_destination_ui()
 
         worker = threading.Thread(
             target=self._scrape_worker,
-            args=(filters, self.token_var.get().strip(), self.contact_mode_var.get()),
+            args=(filters, export_settings, self.token_var.get().strip(), self.contact_mode_var.get()),
             daemon=True,
         )
         worker.start()
 
-    def _scrape_worker(self, filters: SearchFilters, token: str, contact_mode: str) -> None:
+    def _scrape_worker(
+        self,
+        filters: SearchFilters,
+        export_settings: ExportSettings,
+        token: str,
+        contact_mode: str,
+    ) -> None:
         try:
             details = asyncio.run(scrape_users(filters, token, self._queue_progress))
-            exported_count = export_profiles_to_csv(details, str(RESULT_CSV_PATH), contact_mode)
-            self.root.after(0, lambda: self._handle_success(exported_count))
+            exported_count = export_profiles(details, export_settings, contact_mode)
+            self.root.after(0, lambda: self._handle_success(exported_count, export_settings))
         except Exception as exc:  # noqa: BLE001
             error_message = str(exc)
             self.root.after(0, lambda: self._handle_error(error_message))
@@ -435,17 +645,30 @@ class GitHubScraperApp:
         self.progress_percent_var.set(f"{int(percentage * 100)}%")
         self.status_var.set(message)
 
-    def _handle_success(self, exported_count: int) -> None:
+    def _handle_success(self, exported_count: int, export_settings: ExportSettings) -> None:
         self._set_running_state(False)
         self.progress.set(1)
         self.progress_text_var.set(f"{exported_count} appended")
         self.progress_percent_var.set("100%")
         self.status_var.set("Export complete")
-        self.result_var.set(f"{RESULT_CSV_PATH}\n{exported_count} profiles appended")
-        messagebox.showinfo(
-            "Export Complete",
-            f"Appended {exported_count} new profiles to:\n{RESULT_CSV_PATH}",
-        )
+
+        if export_settings.destination == DESTINATION_GOOGLE_SHEET:
+            destination_text = (
+                f"{export_settings.spreadsheet_id_or_url}\n"
+                f"Tab: {export_settings.worksheet_name}\n"
+                f"{exported_count} profiles appended"
+            )
+            completion_message = (
+                f"Appended {exported_count} new profiles to Google Sheet:\n"
+                f"{export_settings.spreadsheet_id_or_url}\n"
+                f"Tab: {export_settings.worksheet_name}"
+            )
+        else:
+            destination_text = f"{export_settings.local_path}\n{exported_count} profiles appended"
+            completion_message = f"Appended {exported_count} new profiles to:\n{export_settings.local_path}"
+
+        self.result_var.set(destination_text)
+        messagebox.showinfo("Export Complete", completion_message)
 
     def _handle_error(self, error_message: str) -> None:
         self._set_running_state(False)
@@ -457,6 +680,7 @@ class GitHubScraperApp:
     def _set_running_state(self, is_running: bool) -> None:
         self.is_running = is_running
         self.start_button.configure(state="disabled" if is_running else "normal")
+        self.destination_segment.configure(state="disabled" if is_running else "normal")
 
     def run(self) -> None:
         self.root.mainloop()
