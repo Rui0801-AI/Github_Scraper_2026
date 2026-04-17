@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import Callable
 
 import aiohttp
@@ -97,20 +98,69 @@ async def get_user_detail(
     return await fetch(session, url, headers)
 
 
+async def get_profile_readme(
+    session: aiohttp.ClientSession,
+    username: str,
+    headers: dict[str, str],
+) -> str:
+    url = f"{BASE_URL}/repos/{username}/{username}/readme"
+
+    for _ in range(3):
+        try:
+            async with session.get(url, headers=headers, timeout=10) as response:
+                if response.status == 404:
+                    return ""
+                if response.status == 403:
+                    raise RuntimeError("GitHub rate limit exceeded. Add a token or try again later.")
+                if response.status >= 400:
+                    text = await response.text()
+                    raise RuntimeError(f"GitHub returned {response.status}: {text[:120]}")
+
+                data = await response.json()
+                encoded_content = data.get("content", "")
+                if not encoded_content:
+                    return ""
+
+                normalized = encoded_content.replace("\n", "")
+                try:
+                    return base64.b64decode(normalized).decode("utf-8", errors="ignore")
+                except Exception:  # noqa: BLE001
+                    return ""
+        except RuntimeError:
+            raise
+        except Exception:  # noqa: BLE001
+            await asyncio.sleep(1)
+
+    return ""
+
+
+async def get_user_detail_with_readme(
+    session: aiohttp.ClientSession,
+    username: str,
+    headers: dict[str, str],
+) -> dict:
+    detail, readme_content = await asyncio.gather(
+        get_user_detail(session, username, headers),
+        get_profile_readme(session, username, headers),
+    )
+    detail["readme_content"] = readme_content
+    return detail
+
+
 async def fetch_all_details(
     users: list[dict],
     headers: dict[str, str],
     progress_callback: ProgressCallback | None = None,
 ) -> list[dict]:
     async with aiohttp.ClientSession() as session:
-        tasks = [get_user_detail(session, user["login"], headers) for user in users]
+        tasks = [get_user_detail_with_readme(session, user["login"], headers) for user in users]
         results: list[dict] = []
 
         for index, task in enumerate(asyncio.as_completed(tasks), start=1):
             result = await task
             results.append(result)
             if progress_callback:
-                progress_callback(index, len(tasks), "Loading profile details...")
+                progress_callback(index, len(tasks), "Loading profile details and README content...")
 
         return results
 
