@@ -7,8 +7,8 @@ A desktop Tkinter app for searching public GitHub profiles by location and optio
 - Search GitHub users by required location
 - Narrow results with optional keyword, creation date, repository count, and follower count filters
 - Export profile details to a local CSV file or a Google Sheet
-- Include email and LinkedIn details when they are publicly available
-- Read each user's GitHub profile README and extract email or LinkedIn details from there too
+- Include email, LinkedIn, and Discord details when they are publicly available
+- Read each user's GitHub profile README and extract email, LinkedIn, or Discord details from there too
 - Track progress while profile details are being fetched
 
 ## Requirements
@@ -73,6 +73,7 @@ Both destinations use the same columns:
 - `location`
 - `email`
 - `linkedin`
+- `discord`
 
 ## Notes
 
@@ -82,6 +83,7 @@ Both destinations use the same columns:
 - Min and max repo/follower fields must be whole numbers.
 - Duplicate usernames are skipped for both CSV and Google Sheets exports.
 - Profile README content is checked in addition to the GitHub bio and blog fields.
+- The Discord column is extracted from public bio/blog/README text when it matches common Discord URLs or usernames.
 
 ## Project Structure
 
