@@ -12,7 +12,13 @@ from github_scraper.models import DESTINATION_GOOGLE_SHEET, ExportSettings
 
 EMAIL_PATTERN = re.compile(r"[\w\.-]+@[\w\.-]+")
 LINKEDIN_PATTERN = re.compile(r"https?://(?:[\w-]+\.)?linkedin\.com/in/[^\s<>\]\)\"']+", re.IGNORECASE)
-CSV_HEADERS = ["username", "url", "location", "email", "linkedin"]
+DISCORD_URL_PATTERN = re.compile(
+    r"https?://(?:www\.)?(?:discord(?:app)?\.com/users/\d+|discord\.gg/[^\s<>\]\)\"']+)",
+    re.IGNORECASE,
+)
+DISCORD_TAG_PATTERN = re.compile(r"(?:discord(?:\s+(?:id|tag|username|user|handle))?[:\s@-]+)([a-z0-9._]{2,32})", re.IGNORECASE)
+LEGACY_DISCORD_TAG_PATTERN = re.compile(r"\b([A-Za-z0-9._]{2,32}#[0-9]{4})\b")
+CSV_HEADERS = ["username", "url", "location", "email", "linkedin", "discord"]
 
 
 def extract_email(text: str | None) -> str:
@@ -42,12 +48,34 @@ def extract_linkedin(*texts: str | None) -> str:
     return ""
 
 
-def _matches_contact_mode(email: str, linkedin: str, contact_mode: str) -> bool:
+def extract_discord(*texts: str | None) -> str:
+    for text in texts:
+        if not text:
+            continue
+
+        url_match = DISCORD_URL_PATTERN.search(text)
+        if url_match:
+            return url_match.group(0).rstrip(".,;:")
+
+        labeled_match = DISCORD_TAG_PATTERN.search(text)
+        if labeled_match:
+            return labeled_match.group(1).rstrip(".,;:")
+
+        legacy_match = LEGACY_DISCORD_TAG_PATTERN.search(text)
+        if legacy_match:
+            return legacy_match.group(1).rstrip(".,;:")
+
+    return ""
+
+
+def _matches_contact_mode(email: str, linkedin: str, discord: str, contact_mode: str) -> bool:
     if contact_mode == "email":
         return bool(email)
     if contact_mode == "linkedin":
         return bool(linkedin)
-    return bool(email) or bool(linkedin)
+    if contact_mode == "discord":
+        return bool(discord)
+    return bool(email) or bool(linkedin) or bool(discord)
 
 
 def _build_export_rows(details: list[dict[str, Any]], contact_mode: str) -> list[list[str]]:
@@ -64,7 +92,8 @@ def _build_export_rows(details: list[dict[str, Any]], contact_mode: str) -> list
             or extract_first_email(detail.get("bio"), detail.get("blog"), readme_content)
         ).strip()
         linkedin = extract_linkedin(detail.get("blog"), detail.get("bio"), readme_content).strip()
-        if not _matches_contact_mode(email, linkedin, contact_mode):
+        discord = extract_discord(detail.get("blog"), detail.get("bio"), readme_content).strip()
+        if not _matches_contact_mode(email, linkedin, discord, contact_mode):
             continue
 
         rows.append(
@@ -74,6 +103,7 @@ def _build_export_rows(details: list[dict[str, Any]], contact_mode: str) -> list
                 str(detail.get("location") or "").strip(),
                 email,
                 linkedin,
+                discord,
             ]
         )
 
@@ -89,9 +119,42 @@ def _load_existing_usernames(file_path: Path) -> set[str]:
         return {row["username"] for row in reader if row.get("username")}
 
 
+def _upgrade_existing_csv_schema(file_path: Path) -> None:
+    if not file_path.exists() or file_path.stat().st_size == 0:
+        return
+
+    with file_path.open("r", newline="", encoding="utf-8") as file_obj:
+        rows = list(csv.reader(file_obj))
+
+    if not rows:
+        return
+
+    current_header = rows[0]
+    if current_header == CSV_HEADERS:
+        return
+
+    header_index = {name: index for index, name in enumerate(current_header)}
+    if "username" not in header_index:
+        return
+
+    upgraded_rows = [CSV_HEADERS]
+    for row in rows[1:]:
+        upgraded_rows.append(
+            [
+                row[header_index[name]].strip() if name in header_index and header_index[name] < len(row) else ""
+                for name in CSV_HEADERS
+            ]
+        )
+
+    with file_path.open("w", newline="", encoding="utf-8") as file_obj:
+        writer = csv.writer(file_obj)
+        writer.writerows(upgraded_rows)
+
+
 def _export_profiles_to_csv(rows: list[list[str]], file_path: str) -> int:
     csv_path = Path(file_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
+    _upgrade_existing_csv_schema(csv_path)
     seen = _load_existing_usernames(csv_path)
     appended_count = 0
     write_header = not csv_path.exists() or csv_path.stat().st_size == 0
@@ -218,19 +281,22 @@ def _ensure_sheet_header(service: Any, spreadsheet_id: str, worksheet_name: str)
     response = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=spreadsheet_id, range=f"{worksheet_name}!A1:E1")
+        .get(spreadsheetId=spreadsheet_id, range=f"{worksheet_name}!A1:F1")
         .execute()
     )
     values = response.get("values", [])
+
     if values:
-        return
+        current_header = values[0]
+        if current_header[: len(CSV_HEADERS)] == CSV_HEADERS:
+            return
 
     (
         service.spreadsheets()
         .values()
         .update(
             spreadsheetId=spreadsheet_id,
-            range=f"{worksheet_name}!A1:E1",
+            range=f"{worksheet_name}!A1:F1",
             valueInputOption="RAW",
             body={"values": [CSV_HEADERS]},
         )
@@ -265,7 +331,7 @@ def _export_profiles_to_google_sheet(rows: list[list[str]], settings: ExportSett
             .values()
             .append(
                 spreadsheetId=spreadsheet_id,
-                range=f"{worksheet_name}!A:E",
+                range=f"{worksheet_name}!A:F",
                 valueInputOption="RAW",
                 insertDataOption="INSERT_ROWS",
                 body={"values": rows_to_append},
