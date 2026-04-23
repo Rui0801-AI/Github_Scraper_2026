@@ -217,7 +217,7 @@ class GitHubScraperApp:
 
         self.contact_segment = ctk.CTkSegmentedButton(
             block,
-            values=["email", "linkedin", "both"],
+            values=["email", "linkedin", "discord", "both"],
             variable=self.contact_mode_var,
             height=40,
             corner_radius=14,
