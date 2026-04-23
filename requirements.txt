@@ -1,0 +1,6 @@
+aiohttp
+customtkinter
+
+# Optional: install these too if you want Google Sheets service-account export support.
+google-api-python-client
+google-auth
