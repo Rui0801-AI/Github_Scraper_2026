@@ -38,6 +38,16 @@ You do not need these packages if you use the Apps Script Web App method below.
 python main.py
 ```
 
+## Screenshots
+
+### Google Sheets Export
+
+![GitHub Talent Scraper with Google Sheets export selected](Screenshot_1.png)
+
+### Local CSV Export
+
+![GitHub Talent Scraper with local CSV export selected](Screenshot_2.png)
+
 ## Google Sheets Setup
 
 ### Option 1: Apps Script Web App (Recommended)
